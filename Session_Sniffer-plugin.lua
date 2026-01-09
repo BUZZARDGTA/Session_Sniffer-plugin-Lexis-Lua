@@ -6,8 +6,8 @@
 
 -- Globals START
 ---- Global variables START
-local mainLoopThread
-local playerLeaveEventListener
+local mainLoopThread = nil
+local playerLeaveEventListener = nil
 local player_join__timestamps = {}
 ---- Global variables END
 
@@ -54,37 +54,22 @@ local function read_file(file_path)
     return handle.text, nil
 end
 
-local function is_thread_running(threadId)
-    return threadId ~= nil
-end
-
-local function delete_thread(threadId)
-    if threadId and threadId ~= 0 then
-        util.remove_thread(threadId)
-    end
-end
-
-local function delete_event_listener(listenerId)
-    if listenerId and listenerId ~= 0 then
-        events.unsubscribe(listenerId)
-    end
-end
-
 local function handle_script_exit(params)
     params = params or {}
     if params.hasScriptCrashed == nil then
         params.hasScriptCrashed = false
     end
 
-    -- Don't try to delete threads if we're calling this from within the thread
-    if not params.skipThreadCleanup then
-        if is_thread_running(mainLoopThread) then
-            delete_thread(mainLoopThread)
-        end
+    -- Thread cleanup (deterministic)
+    if not params.skipThreadCleanup and mainLoopThread then
+        util.remove_thread(mainLoopThread)
+        mainLoopThread = nil
     end
 
-    if is_thread_running(playerLeaveEventListener) then
-        delete_event_listener(playerLeaveEventListener)
+    -- Event cleanup
+    if playerLeaveEventListener then
+        events.unsubscribe(playerLeaveEventListener)
+        playerLeaveEventListener = nil
     end
 
     if params.hasScriptCrashed then
