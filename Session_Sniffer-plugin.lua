@@ -99,15 +99,12 @@ local function handle_script_exit(params)
 end
 
 local function create_empty_file(filepath)
-    -- Extract the directory part from the filepath
     local dir = filepath:match("^(.*)[/\\]")
 
-    -- Create the directory if it doesn't exist
     if dir and not dirs.exists(dir) then
         dirs.create(dir)
     end
 
-    -- Create the file using Lexis file API
     local handle = file.open(filepath, { create_if_not_exists = true })
     if not handle.valid then
         notify.push(
@@ -236,7 +233,7 @@ mainLoopThread = util.create_thread(function()
         local handle = file.open(SCRIPT_LOG__PATH, { append = true })
         if handle.valid then
             handle.text = handle.text .. "\n"
-            log__content = log__content .. "\n" -- Update our cached content
+            log__content = log__content .. "\n"
         end
     end
 
@@ -245,7 +242,6 @@ mainLoopThread = util.create_thread(function()
         local currentTimestamp = os.time()
 
         for _, player in ipairs(players.list()) do
-            -- Skip if player is not connected or is invalid
             if player.connected and player.exists then
                 local playerID = player.id
                 local playerSCID = player.rockstar_id
