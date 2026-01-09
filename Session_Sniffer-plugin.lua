@@ -134,12 +134,7 @@ local function loggerPreTask(
     playerName,
     playerIP
 )
-    if (
-        not playerSCID
-        or not playerName
-        or not playerIP
-        or playerIP == "255.255.255.255"
-    ) then
+    if not playerSCID or not playerName or not playerIP or playerIP == "255.255.255.255" then
         return
     end
 
