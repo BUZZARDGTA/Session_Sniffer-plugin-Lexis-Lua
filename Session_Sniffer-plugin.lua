@@ -1,0 +1,222 @@
+-- Author: IB_U_Z_Z_A_R_Dl
+-- Description: Plugin for Session Sniffer project on GitHub.
+-- Allows you to automatically have every usernames showing up on Session Sniffer project, by logging all players from your sessions to "Lexis\Grand Theft Auto V\scripts\Session_Sniffer-plugin\log.txt".
+-- GitHub Repository: https://github.com/Illegal-Services/Session_Sniffer-plugin-Lexis-Lua
+
+
+-- Globals START
+---- Global variables START
+local mainLoopThread
+local playerLeaveEventListener
+local player_join__timestamps = {}
+---- Global variables END
+
+---- Global constants START
+local SCRIPT_NAME <const> = "Session_Sniffer-plugin.lua"
+local SCRIPT_TITLE <const> = "Session Sniffer"
+local SCRIPT_LOG__PATH <const> = paths.script .. "\\Session_Sniffer-plugin\\log.txt"
+local natives <const> = require('natives')
+---- Global constants END
+
+---- Global functions START
+-- Function to escape special characters in a string for Lua patterns
+local function escape_magic_characters(str)
+    local matches = {
+        ["^"] = "%^",
+        ["$"] = "%$",
+        ["("] = "%(",
+        [")"] = "%)",
+        ["%"] = "%%",
+        ["."] = "%.",
+        ["["] = "%[",
+        ["]"] = "%]",
+        ["*"] = "%*",
+        ["+"] = "%+",
+        ["-"] = "%-",
+        ["?"] = "%?"
+    }
+    return (str:gsub(".", matches))
+end
+
+local function is_file_string_need_newline_ending(str)
+    if #str == 0 then
+        return false
+    end
+
+    return str:sub(-1) ~= "\n"
+end
+
+local function read_file(file_path)
+    local handle = file.open(file_path, { create_if_not_exists = false })
+    if not handle.valid then
+        return nil, "Failed to open file"
+    end
+    return handle.text, nil
+end
+
+local function is_thread_running(threadId)
+    return threadId ~= nil
+end
+
+local function delete_thread(threadId)
+    if threadId and threadId ~= 0 then
+        util.remove_thread(threadId)
+    end
+end
+
+local function delete_event_listener(listenerId)
+    if listenerId and listenerId ~= 0 then
+        events.unsubscribe(listenerId)
+    end
+end
+
+local function handle_script_exit(params)
+    params = params or {}
+    if params.hasScriptCrashed == nil then
+        params.hasScriptCrashed = false
+    end
+
+    -- Don't try to delete threads if we're calling this from within the thread
+    if not params.skipThreadCleanup then
+        if is_thread_running(mainLoopThread) then
+            delete_thread(mainLoopThread)
+        end
+    end
+
+    if is_thread_running(playerLeaveEventListener) then
+        delete_event_listener(playerLeaveEventListener)
+    end
+
+    if params.hasScriptCrashed then
+        notify.push(SCRIPT_TITLE, "Oh no... Script crashed:(\nYou gotta restart it manually.", { time = 10000 })
+    end
+
+    this.unload()
+end
+
+local function create_empty_file(filepath)
+    -- Extract the directory part from the filepath
+    local dir = filepath:match("^(.*)[/\\]")
+
+    -- Create the directory if it doesn't exist
+    if dir and not dirs.exists(dir) then
+        dirs.create(dir)
+    end
+
+    -- Create the file using Lexis file API
+    local handle = file.open(filepath, { create_if_not_exists = true })
+    if not handle.valid then
+        notify.push(SCRIPT_TITLE, "Failed to create log file at:\n" .. filepath, { time = 15000 })
+        return false
+    end
+
+    return true
+end
+
+local function dec_to_ipv4(ip)
+    return string.format("%i.%i.%i.%i", ip >> 24 & 255, ip >> 16 & 255, ip >> 8 & 255, ip & 255)
+end
+---- Global functions END
+-- Globals END
+
+
+-- === Main Menu Features === --
+local function handle_player_leave(data)
+    player_join__timestamps[data.player.id] = nil
+end
+
+playerLeaveEventListener = events.subscribe(events.event.player_leave, function(data)
+    handle_player_leave(data)
+end)
+
+
+local function loggerPreTask(player_entries_to_log, log__content, currentTimestamp, playerID, playerSCID, playerName, playerIP)
+    if (
+        not playerSCID
+        or not playerName
+        or not playerIP
+        or playerIP == "255.255.255.255"
+    ) then
+        return
+    end
+
+    if not player_join__timestamps[playerID] then
+        player_join__timestamps[playerID] = os.time()
+    end
+
+    local entry_pattern = string.format("user:(%s), scid:(%d), ip:(%s), timestamp:(%%d+)", escape_magic_characters(playerName), playerSCID, escape_magic_characters(playerIP))
+    if not log__content:find("^" .. entry_pattern) and not log__content:find("\n" .. entry_pattern) then
+        table.insert(player_entries_to_log, string.format("user:%s, scid:%d, ip:%s, timestamp:%d", playerName, playerSCID, playerIP, currentTimestamp))
+    end
+end
+
+local function write_to_log_file(player_entries_to_log)
+    if not file.exists(SCRIPT_LOG__PATH) then
+        if not create_empty_file(SCRIPT_LOG__PATH) then
+            handle_script_exit({ hasScriptCrashed = true })
+            return
+        end
+    end
+
+    local handle = file.open(SCRIPT_LOG__PATH, { append = true })
+    if not handle.valid then
+        handle_script_exit({ hasScriptCrashed = true })
+        return
+    end
+
+    local combined_entries = table.concat(player_entries_to_log, "\n")
+    handle.text = handle.text .. combined_entries .. "\n"
+end
+
+
+-- === Main Loop === --
+mainLoopThread = util.create_thread(function()
+    if not file.exists(SCRIPT_LOG__PATH) then
+        if not create_empty_file(SCRIPT_LOG__PATH) then
+            handle_script_exit({ hasScriptCrashed = true, skipThreadCleanup = true })
+            return
+        end
+    end
+
+    local log__content, err = read_file(SCRIPT_LOG__PATH)
+    if err then
+        handle_script_exit({ hasScriptCrashed = true, skipThreadCleanup = true })
+        return
+    end
+
+    if is_file_string_need_newline_ending(log__content) then
+        local handle = file.open(SCRIPT_LOG__PATH, { append = true })
+        if handle.valid then
+            handle.text = handle.text .. "\n"
+            log__content = log__content .. "\n" -- Update our cached content
+        end
+    end
+
+    if natives.network_is_session_started() then
+        local player_entries_to_log = {}
+        local currentTimestamp = os.time()
+
+        for _, player in ipairs(players.list()) do
+            -- Skip if player is not connected or is invalid
+            if player.connected and player.exists then
+                local playerID = player.id
+                local playerSCID = player.rockstar_id
+                local playerName = player.name
+                local playerIP = dec_to_ipv4(player.ip_address)
+
+                loggerPreTask(player_entries_to_log, log__content, currentTimestamp, playerID, playerSCID, playerName, playerIP)
+            end
+
+            util.yield()
+        end
+
+        if #player_entries_to_log > 0 then
+            write_to_log_file(player_entries_to_log)
+        end
+
+    else
+        player_join__timestamps = {}
+    end
+
+    util.yield()
+end)
