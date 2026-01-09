@@ -88,7 +88,11 @@ local function handle_script_exit(params)
     end
 
     if params.hasScriptCrashed then
-        notify.push(SCRIPT_TITLE, "Oh no... Script crashed:(\nYou gotta restart it manually.", { time = 10000 })
+        notify.push(
+            SCRIPT_TITLE,
+            "Oh no... Script crashed:(\nYou gotta restart it manually.",
+            { time = 10000 }
+        )
     end
 
     this.unload()
@@ -106,7 +110,11 @@ local function create_empty_file(filepath)
     -- Create the file using Lexis file API
     local handle = file.open(filepath, { create_if_not_exists = true })
     if not handle.valid then
-        notify.push(SCRIPT_TITLE, "Failed to create log file at:\n" .. filepath, { time = 15000 })
+        notify.push(
+            SCRIPT_TITLE,
+            "Failed to create log file at:\n" .. filepath,
+            { time = 15000 }
+        )
         return false
     end
 
@@ -114,7 +122,13 @@ local function create_empty_file(filepath)
 end
 
 local function dec_to_ipv4(ip)
-    return string.format("%i.%i.%i.%i", ip >> 24 & 255, ip >> 16 & 255, ip >> 8 & 255, ip & 255)
+    return string.format(
+        "%i.%i.%i.%i",
+        ip >> 24 & 255,
+        ip >> 16 & 255,
+        ip >> 8 & 255,
+        ip & 255
+    )
 end
 ---- Global functions END
 -- Globals END
@@ -125,12 +139,23 @@ local function handle_player_leave(data)
     player_join__timestamps[data.player.id] = nil
 end
 
-playerLeaveEventListener = events.subscribe(events.event.player_leave, function(data)
-    handle_player_leave(data)
-end)
+playerLeaveEventListener = events.subscribe(
+    events.event.player_leave,
+    function(data)
+        handle_player_leave(data)
+    end
+)
 
 
-local function loggerPreTask(player_entries_to_log, log__content, currentTimestamp, playerID, playerSCID, playerName, playerIP)
+local function loggerPreTask(
+    player_entries_to_log,
+    log__content,
+    currentTimestamp,
+    playerID,
+    playerSCID,
+    playerName,
+    playerIP
+)
     if (
         not playerSCID
         or not playerName
@@ -144,9 +169,26 @@ local function loggerPreTask(player_entries_to_log, log__content, currentTimesta
         player_join__timestamps[playerID] = os.time()
     end
 
-    local entry_pattern = string.format("user:(%s), scid:(%d), ip:(%s), timestamp:(%%d+)", escape_magic_characters(playerName), playerSCID, escape_magic_characters(playerIP))
-    if not log__content:find("^" .. entry_pattern) and not log__content:find("\n" .. entry_pattern) then
-        table.insert(player_entries_to_log, string.format("user:%s, scid:%d, ip:%s, timestamp:%d", playerName, playerSCID, playerIP, currentTimestamp))
+    local entry_pattern = string.format(
+        "user:(%s), scid:(%d), ip:(%s), timestamp:(%%d+)",
+        escape_magic_characters(playerName),
+        playerSCID,
+        escape_magic_characters(playerIP)
+    )
+
+    if not log__content:find("^" .. entry_pattern)
+        and not log__content:find("\n" .. entry_pattern)
+    then
+        table.insert(
+            player_entries_to_log,
+            string.format(
+                "user:%s, scid:%d, ip:%s, timestamp:%d",
+                playerName,
+                playerSCID,
+                playerIP,
+                currentTimestamp
+            )
+        )
     end
 end
 
@@ -173,14 +215,20 @@ end
 mainLoopThread = util.create_thread(function()
     if not file.exists(SCRIPT_LOG__PATH) then
         if not create_empty_file(SCRIPT_LOG__PATH) then
-            handle_script_exit({ hasScriptCrashed = true, skipThreadCleanup = true })
+            handle_script_exit({
+                hasScriptCrashed = true,
+                skipThreadCleanup = true
+            })
             return
         end
     end
 
     local log__content, err = read_file(SCRIPT_LOG__PATH)
     if err then
-        handle_script_exit({ hasScriptCrashed = true, skipThreadCleanup = true })
+        handle_script_exit({
+            hasScriptCrashed = true,
+            skipThreadCleanup = true
+        })
         return
     end
 
@@ -204,7 +252,15 @@ mainLoopThread = util.create_thread(function()
                 local playerName = player.name
                 local playerIP = dec_to_ipv4(player.ip_address)
 
-                loggerPreTask(player_entries_to_log, log__content, currentTimestamp, playerID, playerSCID, playerName, playerIP)
+                loggerPreTask(
+                    player_entries_to_log,
+                    log__content,
+                    currentTimestamp,
+                    playerID,
+                    playerSCID,
+                    playerName,
+                    playerIP
+                )
             end
 
             util.yield()
