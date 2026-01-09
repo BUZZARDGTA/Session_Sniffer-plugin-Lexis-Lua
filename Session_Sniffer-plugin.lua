@@ -39,11 +39,7 @@ local function escape_magic_characters(str)
 end
 
 local function is_file_string_need_newline_ending(str)
-    if #str == 0 then
-        return false
-    end
-
-    return str:sub(-1) ~= "\n"
+    return #str > 0 and str:sub(-1) ~= "\n"
 end
 
 local function read_file(file_path)
