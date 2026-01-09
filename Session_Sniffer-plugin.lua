@@ -188,20 +188,14 @@ end
 mainLoopThread = util.create_thread(function()
     if not file.exists(SCRIPT_LOG__PATH) then
         if not create_empty_file(SCRIPT_LOG__PATH) then
-            handle_script_exit({
-                hasScriptCrashed = true,
-                skipThreadCleanup = true
-            })
+            handle_script_exit({ hasScriptCrashed = true, skipThreadCleanup = true })
             return
         end
     end
 
     local log__content, err = read_file(SCRIPT_LOG__PATH)
     if err then
-        handle_script_exit({
-            hasScriptCrashed = true,
-            skipThreadCleanup = true
-        })
+        handle_script_exit({ hasScriptCrashed = true, skipThreadCleanup = true })
         return
     end
 
