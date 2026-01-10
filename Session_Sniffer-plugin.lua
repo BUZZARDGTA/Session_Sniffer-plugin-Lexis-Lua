@@ -123,11 +123,9 @@ local function loggerPreTask(player_entries_to_log, currentTimestamp, playerSCID
     logged_players[playerSCID] = logged_players[playerSCID] or {}
     if not logged_players[playerSCID][playerIP] then
         logged_players[playerSCID][playerIP] = true
-        table.insert(player_entries_to_log,
-            string.format(
-                "user:%s, scid:%d, ip:%s, timestamp:%d",
-                playerName, playerSCID, playerIP, currentTimestamp
-            )
+        player_entries_to_log[#player_entries_to_log + 1] = string.format(
+            "user:%s, scid:%d, ip:%s, timestamp:%d",
+            playerName, playerSCID, playerIP, currentTimestamp
         )
     end
 end
