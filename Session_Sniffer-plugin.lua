@@ -3,22 +3,18 @@
 -- Allows you to automatically have every usernames showing up on Session Sniffer project, by logging all players from your sessions to "Lexis\Grand Theft Auto V\scripts\Session_Sniffer-plugin\log.txt".
 -- GitHub Repository: https://github.com/Illegal-Services/Session_Sniffer-plugin-Lexis-Lua
 
-
--- Globals START
----- Global variables START
+-- === Globals ===
 local mainLoopThread = nil
 local logged_players = {}  -- key = playerSCID|playerIP
 local initialization_done = false
----- Global variables END
 
 ---- Global constants START
 local SCRIPT_NAME <const> = "Session_Sniffer-plugin.lua"
 local SCRIPT_TITLE <const> = "Session Sniffer"
 local SCRIPT_LOG__PATH <const> = paths.script .. "\\Session_Sniffer-plugin\\log.txt"
 local natives <const> = require('natives')
----- Global constants END
 
----- Global functions START
+-- === Utility Functions ===
 local function is_file_string_need_newline_ending(str)
     return #str > 0 and str:sub(-1) ~= "\n"
 end
@@ -33,12 +29,9 @@ end
 
 local function handle_script_exit(params)
     params = params or {}
-    if params.hasScriptCrashed == nil then
-        params.hasScriptCrashed = false
-    end
+    if params.hasScriptCrashed == nil then params.hasScriptCrashed = false end
 
-    -- Thread cleanup (deterministic)
-    if not params.skipThreadCleanup and mainLoopThread then
+    if mainLoopThread and not params.skipThreadCleanup then
         util.remove_thread(mainLoopThread)
         mainLoopThread = nil
     end
@@ -56,10 +49,7 @@ end
 
 local function create_empty_file(filepath)
     local dir = filepath:match("^(.*)[/\\]")
-
-    if dir and not dirs.exists(dir) then
-        dirs.create(dir)
-    end
+    if dir and not dirs.exists(dir) then dirs.create(dir) end
 
     local handle = file.open(filepath, { create_if_not_exists = true })
     if not handle.valid then
@@ -70,18 +60,11 @@ local function create_empty_file(filepath)
         )
         return false
     end
-
     return true
 end
 
 local function dec_to_ipv4(ip)
-    return string.format(
-        "%i.%i.%i.%i",
-        ip >> 24 & 255,
-        ip >> 16 & 255,
-        ip >> 8 & 255,
-        ip & 255
-    )
+    return string.format("%i.%i.%i.%i", ip >> 24 & 255, ip >> 16 & 255, ip >> 8 & 255, ip & 255)
 end
 ---- Global functions END
 -- Globals END
@@ -171,15 +154,14 @@ local function write_to_log_file(player_entries_to_log)
     end
 end
 
--- === Main Loop === --
+-- === Main Loop ===
 mainLoopThread = util.create_thread(function()
-    -- Wait for initialization to complete
+    -- Wait until initialization completes
     if not initialization_done then
         util.yield()
         return
     end
 
-    -- Main loop tick (called each frame)
     if natives.network_is_session_started() then
         local player_entries_to_log = {}
         local currentTimestamp = os.time()
