@@ -147,7 +147,6 @@ end
 
 -- === Main Loop ===
 mainLoopThread = util.create_thread(function()
-    -- Wait until initialization completes
     while not initialization_done do
         util.yield()
     end
