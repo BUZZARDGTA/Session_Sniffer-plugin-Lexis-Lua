@@ -110,9 +110,8 @@ end)
 
 -- === Logging Helpers ===
 local function loggerPreTask(player_entries_to_log, currentTimestamp, playerSCID, playerName, playerIP)
-    local scid_table = logged_players[playerSCID]
-    if not (scid_table and scid_table[playerIP]) then
-        logged_players[playerSCID] = scid_table or {}
+    logged_players[playerSCID] = logged_players[playerSCID] or {}
+    if not logged_players[playerSCID][playerIP] then
         logged_players[playerSCID][playerIP] = true
         table.insert(player_entries_to_log,
             string.format(
