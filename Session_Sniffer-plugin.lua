@@ -136,10 +136,7 @@ local function write_to_log_file(player_entries_to_log)
         return
     end
 
-    local combined_entries = table.concat(player_entries_to_log, "\n")
-    if combined_entries ~= "" then
-        handle.text = handle.text .. combined_entries .. "\n"
-    end
+    handle.text = table.concat(player_entries_to_log, "\n") .. "\n"
 end
 
 -- === Main Loop ===
