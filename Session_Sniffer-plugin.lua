@@ -7,7 +7,7 @@
 -- Globals START
 ---- Global variables START
 local mainLoopThread = nil
-local logged_players = {} -- key = playerSCID|playerIP
+local logged_players = {}  -- key = playerSCID|playerIP
 local initialization_done = false
 ---- Global variables END
 
