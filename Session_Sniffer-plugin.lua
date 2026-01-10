@@ -94,18 +94,28 @@ util.create_job(function()
     end
 
     -- Populate logged_players set from existing log
+    local loaded_count = 0
     for line in log__content:gmatch("[^\r\n]+") do
         local scid, ip = line:match("scid:(%d+), ip:([%d%.]+)")
         if scid and ip then
             local scid_num = tonumber(scid)
             if scid_num then
                 logged_players[scid_num] = logged_players[scid_num] or {}
-                logged_players[scid_num][ip] = true
+                if not logged_players[scid_num][ip] then
+                    logged_players[scid_num][ip] = true
+                    loaded_count = loaded_count + 1
+                end
             end
         end
     end
 
     initialization_done = true
+
+    notify.push(
+        SCRIPT_TITLE,
+        string.format("Loaded %d known players.\nLog: %s", loaded_count, SCRIPT_LOG__PATH),
+        { time = 8000, icon = notify.icon.info }
+    )
 end)
 
 -- === Logging Helpers ===
