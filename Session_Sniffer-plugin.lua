@@ -164,7 +164,7 @@ mainLoopThread = util.create_thread(function()
                 local playerName = player.name
                 local playerIP = dec_to_ipv4(player.ip_address)
 
-                if playerSCID and playerName and playerIP and playerIP ~= "255.255.255.255" then
+                if playerSCID and playerSCID > 0 and playerName and playerIP and playerIP ~= "255.255.255.255" and playerIP ~= "0.0.0.0" then
                     loggerPreTask(player_entries_to_log, currentTimestamp, playerSCID, playerName, playerIP)
                 end
             end
