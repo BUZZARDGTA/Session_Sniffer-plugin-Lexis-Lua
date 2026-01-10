@@ -135,6 +135,11 @@ end
 local function write_to_log_file(player_entries_to_log)
     local handle = file.open(SCRIPT_LOG__PATH, { append = true })
     if not handle.valid then
+        notify.push(
+            SCRIPT_TITLE,
+            "Cannot write to log file.\nScript is useless without logging.",
+            { time = 10000, icon = notify.icon.hazard }
+        )
         handle_script_exit({ hasScriptCrashed = true })
         return
     end
