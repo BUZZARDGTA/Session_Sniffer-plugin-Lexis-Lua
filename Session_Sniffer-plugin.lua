@@ -99,7 +99,7 @@ util.create_job(function()
         local scid, ip = line:match("scid:(%d+), ip:([%d%.]+)")
         if scid and ip then
             local scid_num = tonumber(scid)
-            if scid_num then
+            if scid_num and scid_num > 0 and ip ~= "0.0.0.0" and ip ~= "255.255.255.255" then
                 logged_players[scid_num] = logged_players[scid_num] or {}
                 if not logged_players[scid_num][ip] then
                     logged_players[scid_num][ip] = true
