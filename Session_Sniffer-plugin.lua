@@ -66,10 +66,8 @@ end
 local function dec_to_ipv4(ip)
     return string.format("%i.%i.%i.%i", ip >> 24 & 255, ip >> 16 & 255, ip >> 8 & 255, ip & 255)
 end
----- Global functions END
--- Globals END
 
--- === One-time Initialization Job === --
+-- === Initialization Job ===
 util.create_job(function()
     -- Ensure log file exists
     if not file.exists(SCRIPT_LOG__PATH) then
@@ -189,5 +187,4 @@ mainLoopThread = util.create_thread(function()
             write_to_log_file(player_entries_to_log)
         end
     end
-
 end)
