@@ -104,14 +104,8 @@ util.create_job(function()
     initialization_done = true
 end)
 
-local function loggerPreTask(
-    player_entries_to_log,
-    currentTimestamp,
-    playerID,
-    playerSCID,
-    playerName,
-    playerIP
-)
+-- === Logging Helpers ===
+local function loggerPreTask(player_entries_to_log, currentTimestamp, playerSCID, playerName, playerIP)
     if not playerSCID or not playerName or not playerIP or playerIP == "255.255.255.255" then
         return
     end
@@ -119,14 +113,10 @@ local function loggerPreTask(
     local key = playerSCID .. "|" .. playerIP
     if not logged_players[key] then
         logged_players[key] = true
-        table.insert(
-            player_entries_to_log,
+        table.insert(player_entries_to_log,
             string.format(
                 "user:%s, scid:%d, ip:%s, timestamp:%d",
-                playerName,
-                playerSCID,
-                playerIP,
-                currentTimestamp
+                playerName, playerSCID, playerIP, currentTimestamp
             )
         )
     end
@@ -166,19 +156,11 @@ mainLoopThread = util.create_thread(function()
 
         for _, player in ipairs(players.list()) do
             if player.connected and player.exists then
-                local playerID = player.id
                 local playerSCID = player.rockstar_id
                 local playerName = player.name
                 local playerIP = dec_to_ipv4(player.ip_address)
 
-                loggerPreTask(
-                    player_entries_to_log,
-                    currentTimestamp,
-                    playerID,
-                    playerSCID,
-                    playerName,
-                    playerIP
-                )
+                loggerPreTask(player_entries_to_log, currentTimestamp, playerSCID, playerName, playerIP)
             end
             util.yield()
         end
