@@ -135,9 +135,8 @@ end
 -- === Main Loop ===
 mainLoopThread = util.create_thread(function()
     -- Wait until initialization completes
-    if not initialization_done then
+    while not initialization_done do
         util.yield()
-        return
     end
 
     if natives.network_is_session_started() then
