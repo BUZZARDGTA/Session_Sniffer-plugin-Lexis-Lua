@@ -106,7 +106,6 @@ end)
 
 -- === Logging Helpers ===
 local function loggerPreTask(player_entries_to_log, currentTimestamp, playerSCID, playerName, playerIP)
-
     local key = playerSCID .. "|" .. playerIP
     if not logged_players[key] then
         logged_players[key] = true
