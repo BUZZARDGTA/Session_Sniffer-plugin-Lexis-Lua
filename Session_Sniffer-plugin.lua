@@ -8,7 +8,7 @@ local mainLoopThread = nil
 local logged_players = {}  -- map: scid -> { [ip] = true }
 local initialization_done = false
 
----- Global constants START
+---- Global constants
 local SCRIPT_NAME <const> = "Session_Sniffer-plugin.lua"
 local SCRIPT_TITLE <const> = "Session Sniffer"
 local SCRIPT_LOG__PATH <const> = paths.script .. "\\Session_Sniffer-plugin\\log.txt"
