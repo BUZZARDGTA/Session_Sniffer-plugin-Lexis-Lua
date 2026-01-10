@@ -1,6 +1,6 @@
 <div align="center">
 
-# GTA V Session Sniffer (Lexis Lua plugin)
+# Session Sniffer (Lexis Lua plugin)
 
 ![Session Sniffer Menu](https://github.com/user-attachments/assets/db66bca0-6a1f-47d7-a4ee-0750e2f1e4ae)
 
