@@ -7,8 +7,8 @@
 -- Globals START
 ---- Global variables START
 local mainLoopThread = nil
-local playerLeaveEventListener = nil
-local player_join__timestamps = {}
+local logged_players = {} -- key = playerSCID|playerIP
+local initialization_done = false
 ---- Global variables END
 
 ---- Global constants START
@@ -19,25 +19,6 @@ local natives <const> = require('natives')
 ---- Global constants END
 
 ---- Global functions START
--- Function to escape special characters in a string for Lua patterns
-local function escape_magic_characters(str)
-    local matches = {
-        ["^"] = "%^",
-        ["$"] = "%$",
-        ["("] = "%(",
-        [")"] = "%)",
-        ["%"] = "%%",
-        ["."] = "%.",
-        ["["] = "%[",
-        ["]"] = "%]",
-        ["*"] = "%*",
-        ["+"] = "%+",
-        ["-"] = "%-",
-        ["?"] = "%?"
-    }
-    return (str:gsub(".", matches))
-end
-
 local function is_file_string_need_newline_ending(str)
     return #str > 0 and str:sub(-1) ~= "\n"
 end
@@ -60,12 +41,6 @@ local function handle_script_exit(params)
     if not params.skipThreadCleanup and mainLoopThread then
         util.remove_thread(mainLoopThread)
         mainLoopThread = nil
-    end
-
-    -- Event cleanup
-    if playerLeaveEventListener then
-        events.unsubscribe(playerLeaveEventListener)
-        playerLeaveEventListener = nil
     end
 
     if params.hasScriptCrashed then
@@ -111,23 +86,45 @@ end
 ---- Global functions END
 -- Globals END
 
-
--- === Main Menu Features === --
-local function handle_player_leave(data)
-    player_join__timestamps[data.player.id] = nil
-end
-
-playerLeaveEventListener = events.subscribe(
-    events.event.player_leave,
-    function(data)
-        handle_player_leave(data)
+-- === One-time Initialization Job === --
+util.create_job(function()
+    -- Ensure log file exists
+    if not file.exists(SCRIPT_LOG__PATH) then
+        if not create_empty_file(SCRIPT_LOG__PATH) then
+            handle_script_exit({ hasScriptCrashed = true })
+            return
+        end
     end
-)
 
+    -- Load log file content
+    local log__content, err = read_file(SCRIPT_LOG__PATH)
+    if err then
+        handle_script_exit({ hasScriptCrashed = true })
+        return
+    end
+
+    -- Fix newline if missing
+    if is_file_string_need_newline_ending(log__content) then
+        local handle = file.open(SCRIPT_LOG__PATH, { append = true })
+        if handle.valid then
+            handle.text = handle.text .. "\n"
+            log__content = log__content .. "\n"
+        end
+    end
+
+    -- Populate logged_players set from existing log
+    for line in log__content:gmatch("[^\r\n]+") do
+        local scid, ip = line:match("scid:(%d+), ip:([%d%.]+)")
+        if scid and ip then
+            logged_players[scid .. "|" .. ip] = true
+        end
+    end
+
+    initialization_done = true
+end)
 
 local function loggerPreTask(
     player_entries_to_log,
-    log__content,
     currentTimestamp,
     playerID,
     playerSCID,
@@ -138,20 +135,9 @@ local function loggerPreTask(
         return
     end
 
-    if not player_join__timestamps[playerID] then
-        player_join__timestamps[playerID] = os.time()
-    end
-
-    local entry_pattern = string.format(
-        "user:(%s), scid:(%d), ip:(%s), timestamp:(%%d+)",
-        escape_magic_characters(playerName),
-        playerSCID,
-        escape_magic_characters(playerIP)
-    )
-
-    if not log__content:find("^" .. entry_pattern)
-        and not log__content:find("\n" .. entry_pattern)
-    then
+    local key = playerSCID .. "|" .. playerIP
+    if not logged_players[key] then
+        logged_players[key] = true
         table.insert(
             player_entries_to_log,
             string.format(
@@ -180,33 +166,20 @@ local function write_to_log_file(player_entries_to_log)
     end
 
     local combined_entries = table.concat(player_entries_to_log, "\n")
-    handle.text = handle.text .. combined_entries .. "\n"
+    if combined_entries ~= "" then
+        handle.text = handle.text .. combined_entries .. "\n"
+    end
 end
-
 
 -- === Main Loop === --
 mainLoopThread = util.create_thread(function()
-    if not file.exists(SCRIPT_LOG__PATH) then
-        if not create_empty_file(SCRIPT_LOG__PATH) then
-            handle_script_exit({ hasScriptCrashed = true, skipThreadCleanup = true })
-            return
-        end
-    end
-
-    local log__content, err = read_file(SCRIPT_LOG__PATH)
-    if err then
-        handle_script_exit({ hasScriptCrashed = true, skipThreadCleanup = true })
+    -- Wait for initialization to complete
+    if not initialization_done then
+        util.yield()
         return
     end
 
-    if is_file_string_need_newline_ending(log__content) then
-        local handle = file.open(SCRIPT_LOG__PATH, { append = true })
-        if handle.valid then
-            handle.text = handle.text .. "\n"
-            log__content = log__content .. "\n"
-        end
-    end
-
+    -- Main loop tick (called each frame)
     if natives.network_is_session_started() then
         local player_entries_to_log = {}
         local currentTimestamp = os.time()
@@ -220,7 +193,6 @@ mainLoopThread = util.create_thread(function()
 
                 loggerPreTask(
                     player_entries_to_log,
-                    log__content,
                     currentTimestamp,
                     playerID,
                     playerSCID,
@@ -228,17 +200,12 @@ mainLoopThread = util.create_thread(function()
                     playerIP
                 )
             end
-
             util.yield()
         end
 
         if #player_entries_to_log > 0 then
             write_to_log_file(player_entries_to_log)
         end
-
-    else
-        player_join__timestamps = {}
     end
 
-    util.yield()
 end)
