@@ -144,7 +144,7 @@ mainLoopThread = util.create_thread(function()
         local currentTimestamp = os.time()
 
         for _, player in ipairs(players.list()) do
-            if player.connected and player.exists then
+            if player.connected and player.exists and player ~= players.me() then
                 local playerSCID = player.rockstar_id
                 local playerName = player.name
                 local playerIP = dec_to_ipv4(player.ip_address)
