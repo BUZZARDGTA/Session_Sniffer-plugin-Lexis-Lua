@@ -5,7 +5,7 @@
 
 -- === Globals ===
 local mainLoopThread = nil
-local logged_players = {}  -- key = playerSCID|playerIP
+local logged_players = {}  -- map: scid -> { [ip] = true }
 local initialization_done = false
 
 ---- Global constants START
@@ -97,7 +97,11 @@ util.create_job(function()
     for line in log__content:gmatch("[^\r\n]+") do
         local scid, ip = line:match("scid:(%d+), ip:([%d%.]+)")
         if scid and ip then
-            logged_players[scid .. "|" .. ip] = true
+            local scid_num = tonumber(scid)
+            if scid_num then
+                logged_players[scid_num] = logged_players[scid_num] or {}
+                logged_players[scid_num][ip] = true
+            end
         end
     end
 
@@ -106,9 +110,10 @@ end)
 
 -- === Logging Helpers ===
 local function loggerPreTask(player_entries_to_log, currentTimestamp, playerSCID, playerName, playerIP)
-    local key = playerSCID .. "|" .. playerIP
-    if not logged_players[key] then
-        logged_players[key] = true
+    local scid_table = logged_players[playerSCID]
+    if not (scid_table and scid_table[playerIP]) then
+        logged_players[playerSCID] = scid_table or {}
+        logged_players[playerSCID][playerIP] = true
         table.insert(player_entries_to_log,
             string.format(
                 "user:%s, scid:%d, ip:%s, timestamp:%d",
