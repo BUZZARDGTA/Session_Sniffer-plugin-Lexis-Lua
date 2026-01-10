@@ -106,9 +106,6 @@ end)
 
 -- === Logging Helpers ===
 local function loggerPreTask(player_entries_to_log, currentTimestamp, playerSCID, playerName, playerIP)
-    if not playerSCID or not playerName or not playerIP or playerIP == "255.255.255.255" then
-        return
-    end
 
     local key = playerSCID .. "|" .. playerIP
     if not logged_players[key] then
@@ -149,7 +146,9 @@ mainLoopThread = util.create_thread(function()
                 local playerName = player.name
                 local playerIP = dec_to_ipv4(player.ip_address)
 
-                loggerPreTask(player_entries_to_log, currentTimestamp, playerSCID, playerName, playerIP)
+                if playerSCID and playerName and playerIP ~= "255.255.255.255" then
+                    loggerPreTask(player_entries_to_log, currentTimestamp, playerSCID, playerName, playerIP)
+                end
             end
             util.yield()
         end
