@@ -123,13 +123,6 @@ local function loggerPreTask(player_entries_to_log, currentTimestamp, playerSCID
 end
 
 local function write_to_log_file(player_entries_to_log)
-    if not file.exists(SCRIPT_LOG__PATH) then
-        if not create_empty_file(SCRIPT_LOG__PATH) then
-            handle_script_exit({ hasScriptCrashed = true })
-            return
-        end
-    end
-
     local handle = file.open(SCRIPT_LOG__PATH, { append = true })
     if not handle.valid then
         handle_script_exit({ hasScriptCrashed = true })
