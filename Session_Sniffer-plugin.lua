@@ -1,6 +1,6 @@
 -- Author: IB_U_Z_Z_A_R_Dl
 -- Description: Plugin for Session Sniffer project on GitHub.
--- Allows you to automatically have every usernames showing up on Session Sniffer project, by logging all players from your sessions to "Lexis\Grand Theft Auto V\scripts\Session_Sniffer-plugin\log.txt".
+-- Enables username resolution in the Session Sniffer project by logging all players from your sessions to "Lexis\Grand Theft Auto V\scripts\Session_Sniffer-plugin\log.txt".
 -- GitHub Repository: https://github.com/Illegal-Services/Session_Sniffer-plugin-Lexis-Lua
 
 -- === Globals ===
