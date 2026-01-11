@@ -67,6 +67,27 @@ local function dec_to_ipv4(ip)
     return string.format("%i.%i.%i.%i", ip >> 24 & 255, ip >> 16 & 255, ip >> 8 & 255, ip & 255)
 end
 
+local function extract_valid_player_data(player)
+    if not player
+        or not player.connected
+        or not player.exists
+        or player == players.me()
+        or type(player.ip_address) ~= "number" then
+        return nil
+    end
+
+    local scid = player.rockstar_id
+    if not scid or scid <= 0 then return nil end
+
+    local ip = dec_to_ipv4(player.ip_address)
+    if ip == "0.0.0.0" or ip == "255.255.255.255" then return nil end
+
+    local name = player.name
+    if not name or name == "" or name == "**Invalid**" then return nil end
+
+    return scid, name, ip
+end
+
 -- === Initialization Job ===
 util.create_job(function()
     -- Ensure log file exists
@@ -176,17 +197,11 @@ mainLoopThread = util.create_thread(function()
 
     if NATIVES.network_is_session_started() then
         local player_entries_to_log = {}
-        local currentTimestamp = os.time()
 
         for _, player in ipairs(players.list()) do
-            if player.connected and player.exists and player ~= players.me() and type(player.ip_address) == "number" then
-                local playerSCID = player.rockstar_id
-                local playerName = player.name
-                local playerIP = dec_to_ipv4(player.ip_address)
-
-                if playerSCID and playerSCID > 0 and playerName and playerIP and playerIP ~= "255.255.255.255" and playerIP ~= "0.0.0.0" then
-                    add_player_to_log_buffer(player_entries_to_log, currentTimestamp, playerSCID, playerName, playerIP)
-                end
+            local scid, name, ip = extract_valid_player_data(player)
+            if scid then
+                add_player_to_log_buffer(player_entries_to_log, os.time(), scid, name, ip)
             end
             util.yield()
         end
