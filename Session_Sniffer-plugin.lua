@@ -4,15 +4,15 @@
 -- GitHub Repository: https://github.com/Illegal-Services/Session_Sniffer-plugin-Lexis-Lua
 
 -- === Globals ===
-local main_loop_thread = nil
-local logged_players = {}  -- map: scid -> { [ip] = true }
-local initialization_done = false
+local mainLoopThread = nil
+local loggedPlayers = {}  -- map: scid -> { [ip] = true }
+local initializationDone = false
 
 -- === Constants ===
 local SCRIPT_NAME <const> = "Session_Sniffer-plugin.lua"
 local SCRIPT_TITLE <const> = "Session Sniffer"
 local LOG_FILE_PATH <const> = paths.script .. "\\Session_Sniffer-plugin\\log.txt"
-local NATIVES <const> = require("natives")
+local Natives <const> = require("natives")
 
 -- === Utility Functions ===
 local function is_file_string_need_newline_ending(str)
@@ -47,9 +47,9 @@ local function handle_script_exit(params)
     params = params or {}
     if params.has_script_crashed == nil then params.has_script_crashed = false end
 
-    if main_loop_thread and not params.skip_thread_cleanup then
-        util.remove_thread(main_loop_thread)
-        main_loop_thread = nil
+    if mainLoopThread and not params.skip_thread_cleanup then
+        util.remove_thread(mainLoopThread)
+        mainLoopThread = nil
     end
 
     if params.has_script_crashed then
@@ -129,8 +129,8 @@ util.create_job(function()
             local scid_num = tonumber(scid)
             if scid_num and scid_num > 0 and ip ~= "0.0.0.0" and ip ~= "255.255.255.255" then
                 total_loaded = total_loaded + 1
-                logged_players[scid_num] = logged_players[scid_num] or {}
-                logged_players[scid_num][ip] = true
+                loggedPlayers[scid_num] = loggedPlayers[scid_num] or {}
+                loggedPlayers[scid_num][ip] = true
 
                 unique_scids[scid_num] = true
                 unique_ips[ip] = true
@@ -139,7 +139,7 @@ util.create_job(function()
         end
     end
 
-    initialization_done = true
+    initializationDone = true
 
     local function count(tbl)
         local n = 0
@@ -164,9 +164,9 @@ end)
 
 -- === Logging Helpers ===
 local function add_player_to_log_buffer(player_entries_to_log, current_timestamp, player_scid, player_name, player_ip)
-    logged_players[player_scid] = logged_players[player_scid] or {}
-    if not logged_players[player_scid][player_ip] then
-        logged_players[player_scid][player_ip] = true
+    loggedPlayers[player_scid] = loggedPlayers[player_scid] or {}
+    if not loggedPlayers[player_scid][player_ip] then
+        loggedPlayers[player_scid][player_ip] = true
         player_entries_to_log[#player_entries_to_log + 1] = string.format(
             "user:%s, scid:%d, ip:%s, timestamp:%d",
             player_name, player_scid, player_ip, current_timestamp
@@ -191,7 +191,7 @@ end
 
 -- === Event Listeners ===
 events.subscribe(events.event.player_join, function(data)
-    while not initialization_done do
+    while not initializationDone do
         util.yield()
     end
 
@@ -209,12 +209,12 @@ events.subscribe(events.event.player_join, function(data)
 end)
 
 -- === Main Loop ===
-main_loop_thread = util.create_thread(function()
+mainLoopThread = util.create_thread(function()
     while not initialization_done do
         util.yield()
     end
 
-    if NATIVES.network_is_session_started() then
+    if Natives.network_is_session_started() then
         local player_entries_to_log = {}
 
         for _, player in ipairs(players.list()) do
