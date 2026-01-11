@@ -142,7 +142,7 @@ util.create_job(function()
 end)
 
 -- === Logging Helpers ===
-local function loggerPreTask(player_entries_to_log, currentTimestamp, playerSCID, playerName, playerIP)
+local function add_player_to_log_buffer(player_entries_to_log, currentTimestamp, playerSCID, playerName, playerIP)
     logged_players[playerSCID] = logged_players[playerSCID] or {}
     if not logged_players[playerSCID][playerIP] then
         logged_players[playerSCID][playerIP] = true
@@ -153,7 +153,7 @@ local function loggerPreTask(player_entries_to_log, currentTimestamp, playerSCID
     end
 end
 
-local function write_to_log_file(player_entries_to_log)
+local function write_log_buffer_to_file(player_entries_to_log)
     local handle = file.open(LOG_FILE_PATH, { append = true })
     if not handle.valid then
         notify.push(
@@ -185,14 +185,14 @@ mainLoopThread = util.create_thread(function()
                 local playerIP = dec_to_ipv4(player.ip_address)
 
                 if playerSCID and playerSCID > 0 and playerName and playerIP and playerIP ~= "255.255.255.255" and playerIP ~= "0.0.0.0" then
-                    loggerPreTask(player_entries_to_log, currentTimestamp, playerSCID, playerName, playerIP)
+                    add_player_to_log_buffer(player_entries_to_log, currentTimestamp, playerSCID, playerName, playerIP)
                 end
             end
             util.yield()
         end
 
         if #player_entries_to_log > 0 then
-            write_to_log_file(player_entries_to_log)
+            write_log_buffer_to_file(player_entries_to_log)
         end
     end
 end)
