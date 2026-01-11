@@ -163,13 +163,13 @@ util.create_job(function()
 end)
 
 -- === Logging Helpers ===
-local function add_player_to_log_buffer(player_entries_to_log, currentTimestamp, playerSCID, playerName, playerIP)
-    logged_players[playerSCID] = logged_players[playerSCID] or {}
-    if not logged_players[playerSCID][playerIP] then
-        logged_players[playerSCID][playerIP] = true
+local function add_player_to_log_buffer(player_entries_to_log, current_timestamp, player_scid, player_name, player_ip)
+    logged_players[player_scid] = logged_players[player_scid] or {}
+    if not logged_players[player_scid][player_ip] then
+        logged_players[player_scid][player_ip] = true
         player_entries_to_log[#player_entries_to_log + 1] = string.format(
             "user:%s, scid:%d, ip:%s, timestamp:%d",
-            playerName, playerSCID, playerIP, currentTimestamp
+            player_name, player_scid, player_ip, current_timestamp
         )
     end
 end
