@@ -15,7 +15,7 @@ local LOG_FILE_PATH <const> = paths.script .. "\\Session_Sniffer-plugin\\log.txt
 local Natives <const> = require("natives")
 
 -- === Utility Functions ===
-local function is_file_string_need_newline_ending(str)
+local function needs_trailing_newline(str)
     return #str > 0 and str:sub(-1) ~= "\n"
 end
 
