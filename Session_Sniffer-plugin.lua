@@ -4,7 +4,7 @@
 -- GitHub Repository: https://github.com/Illegal-Services/Session_Sniffer-plugin-Lexis-Lua
 
 -- === Globals ===
-local mainLoopThread = nil
+local main_loop_thread = nil
 local logged_players = {}  -- map: scid -> { [ip] = true }
 local initialization_done = false
 
@@ -47,9 +47,9 @@ local function handle_script_exit(params)
     params = params or {}
     if params.hasScriptCrashed == nil then params.hasScriptCrashed = false end
 
-    if mainLoopThread and not params.skipThreadCleanup then
-        util.remove_thread(mainLoopThread)
-        mainLoopThread = nil
+    if main_loop_thread and not params.skipThreadCleanup then
+        util.remove_thread(main_loop_thread)
+        main_loop_thread = nil
     end
 
     if params.hasScriptCrashed then
@@ -209,7 +209,7 @@ events.subscribe(events.event.player_join, function(data)
 end)
 
 -- === Main Loop ===
-mainLoopThread = util.create_thread(function()
+main_loop_thread = util.create_thread(function()
     while not initialization_done do
         util.yield()
     end
