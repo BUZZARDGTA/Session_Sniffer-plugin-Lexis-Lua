@@ -8,11 +8,11 @@ local mainLoopThread = nil
 local logged_players = {}  -- map: scid -> { [ip] = true }
 local initialization_done = false
 
----- Global constants
+-- === Constants ===
 local SCRIPT_NAME <const> = "Session_Sniffer-plugin.lua"
 local SCRIPT_TITLE <const> = "Session Sniffer"
-local SCRIPT_LOG__PATH <const> = paths.script .. "\\Session_Sniffer-plugin\\log.txt"
-local natives <const> = require('natives')
+local LOG_FILE_PATH <const> = paths.script .. "\\Session_Sniffer-plugin\\log.txt"
+local NATIVES <const> = require('natives')
 
 -- === Utility Functions ===
 local function is_file_string_need_newline_ending(str)
@@ -25,6 +25,22 @@ local function read_file(file_path)
         return nil, "Failed to open file"
     end
     return handle.text, nil
+end
+
+local function create_empty_file(filepath)
+    local dir = filepath:match("^(.*)[/\\]")
+    if dir and not dirs.exists(dir) then dirs.create(dir) end
+
+    local handle = file.open(filepath, { create_if_not_exists = true })
+    if not handle.valid then
+        notify.push(
+            SCRIPT_TITLE,
+            "Failed to create log file at:\n" .. filepath,
+            { time = 15000 }
+        )
+        return false
+    end
+    return true
 end
 
 local function handle_script_exit(params)
@@ -47,22 +63,6 @@ local function handle_script_exit(params)
     this.unload()
 end
 
-local function create_empty_file(filepath)
-    local dir = filepath:match("^(.*)[/\\]")
-    if dir and not dirs.exists(dir) then dirs.create(dir) end
-
-    local handle = file.open(filepath, { create_if_not_exists = true })
-    if not handle.valid then
-        notify.push(
-            SCRIPT_TITLE,
-            "Failed to create log file at:\n" .. filepath,
-            { time = 15000 }
-        )
-        return false
-    end
-    return true
-end
-
 local function dec_to_ipv4(ip)
     return string.format("%i.%i.%i.%i", ip >> 24 & 255, ip >> 16 & 255, ip >> 8 & 255, ip & 255)
 end
@@ -70,50 +70,73 @@ end
 -- === Initialization Job ===
 util.create_job(function()
     -- Ensure log file exists
-    if not file.exists(SCRIPT_LOG__PATH) then
-        if not create_empty_file(SCRIPT_LOG__PATH) then
-            handle_script_exit({ hasScriptCrashed = true })
-            return
-        end
+    if not file.exists(LOG_FILE_PATH) and not create_empty_file(LOG_FILE_PATH) then
+        handle_script_exit({ hasScriptCrashed = true })
+        return
     end
 
-    -- Load log file content
-    local log__content, err = read_file(SCRIPT_LOG__PATH)
+    -- Load log content
+    local log_content, err = read_file(LOG_FILE_PATH)
     if err then
         handle_script_exit({ hasScriptCrashed = true })
         return
     end
 
-    -- Fix newline if missing
-    if is_file_string_need_newline_ending(log__content) then
-        local handle = file.open(SCRIPT_LOG__PATH, { append = true })
+    -- Fix missing newline
+    if is_file_string_need_newline_ending(log_content) then
+        local handle = file.open(LOG_FILE_PATH, { append = true })
         if handle.valid then
             handle.text = handle.text .. "\n"
-            log__content = log__content .. "\n"
+            log_content = log_content .. "\n"
         end
     end
 
-    -- Populate logged_players set from existing log
-    local loaded_count = 0
-    for line in log__content:gmatch("[^\r\n]+") do
-        local scid, ip = line:match("scid:(%d+), ip:([%d%.]+)")
+    -- Sets for stats
+    local unique_scids, unique_ips, unique_names = {}, {}, {}
+    local total_lines, total_loaded = 0, 0
+
+    -- Populate logged_players
+    for line in log_content:gmatch("[^\r\n]+") do
+        total_lines = total_lines + 1
+
+        local name, scid, ip = line:match("user:([^,]+),%s*scid:(%d+),%s*ip:([%d%.]+)")
+        if not scid or not ip then
+            scid, ip = line:match("scid:(%d+), ip:([%d%.]+)")
+        end
+
         if scid and ip then
             local scid_num = tonumber(scid)
             if scid_num and scid_num > 0 and ip ~= "0.0.0.0" and ip ~= "255.255.255.255" then
+                total_loaded = total_loaded + 1
                 logged_players[scid_num] = logged_players[scid_num] or {}
-                if not logged_players[scid_num][ip] then
-                    logged_players[scid_num][ip] = true
-                    loaded_count = loaded_count + 1
-                end
+                logged_players[scid_num][ip] = true
+
+                unique_scids[scid_num] = true
+                unique_ips[ip] = true
+                if name and name ~= "" then unique_names[name] = true end
             end
         end
     end
 
     initialization_done = true
 
+    local function count(tbl)
+        local n = 0
+        for _ in pairs(tbl) do n = n + 1 end
+        return n
+    end
+
     notify.push(
         SCRIPT_TITLE,
-        string.format("Loaded %d known players.\nLog: %s", loaded_count, SCRIPT_LOG__PATH),
+        string.format(
+            "Loaded %d players (%d names, %d IPs)\nLines: %d/%d\nLog: %s",
+            count(unique_scids),
+            count(unique_names),
+            count(unique_ips),
+            total_loaded,
+            total_lines,
+            LOG_FILE_PATH
+        ),
         { time = 8000, icon = notify.icon.info }
     )
 end)
@@ -131,7 +154,7 @@ local function loggerPreTask(player_entries_to_log, currentTimestamp, playerSCID
 end
 
 local function write_to_log_file(player_entries_to_log)
-    local handle = file.open(SCRIPT_LOG__PATH, { append = true })
+    local handle = file.open(LOG_FILE_PATH, { append = true })
     if not handle.valid then
         notify.push(
             SCRIPT_TITLE,
@@ -151,7 +174,7 @@ mainLoopThread = util.create_thread(function()
         util.yield()
     end
 
-    if natives.network_is_session_started() then
+    if NATIVES.network_is_session_started() then
         local player_entries_to_log = {}
         local currentTimestamp = os.time()
 
