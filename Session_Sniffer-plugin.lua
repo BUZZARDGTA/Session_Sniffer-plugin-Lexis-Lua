@@ -12,7 +12,7 @@ local initialization_done = false
 local SCRIPT_NAME <const> = "Session_Sniffer-plugin.lua"
 local SCRIPT_TITLE <const> = "Session Sniffer"
 local LOG_FILE_PATH <const> = paths.script .. "\\Session_Sniffer-plugin\\log.txt"
-local NATIVES <const> = require("natives")
+local NATIVES <const> = require('natives')
 
 -- === Utility Functions ===
 local function is_file_string_need_newline_ending(str)
