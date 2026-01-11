@@ -5,8 +5,8 @@
 
 -- === Globals ===
 local mainLoopThread = nil
-local loggedPlayers = {}  -- map: scid -> { [ip] = true }
 local initializationDone = false
+local loggedPlayers = {}  -- Dedup map: scid -> { [ip] = true }
 
 -- === Constants ===
 local SCRIPT_NAME <const> = "Session_Sniffer-plugin.lua"
