@@ -189,6 +189,25 @@ local function write_log_buffer_to_file(player_entries_to_log)
     handle.text = table.concat(player_entries_to_log, "\n") .. "\n"
 end
 
+-- === Event Listeners ===
+events.subscribe(events.event.player_join, function(data)
+    while not initialization_done do
+        util.yield()
+    end
+
+    local player_entries_to_log = {}
+    local player = data.player
+
+    local scid, name, ip = extract_valid_player_data(player)
+    if scid then
+        add_player_to_log_buffer(player_entries_to_log, os.time(), scid, name, ip)
+    end
+
+    if #player_entries_to_log > 0 then
+        write_log_buffer_to_file(player_entries_to_log)
+    end
+end)
+
 -- === Main Loop ===
 mainLoopThread = util.create_thread(function()
     while not initialization_done do
