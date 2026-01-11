@@ -72,7 +72,8 @@ local function extract_valid_player_data(player)
         or not player.connected
         or not player.exists
         or player == players.me()
-        or type(player.ip_address) ~= "number" then
+        or type(player.ip_address) ~= "number"
+    then
         return nil
     end
 
