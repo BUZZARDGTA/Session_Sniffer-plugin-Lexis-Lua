@@ -45,14 +45,14 @@ end
 
 local function handle_script_exit(params)
     params = params or {}
-    if params.hasScriptCrashed == nil then params.hasScriptCrashed = false end
+    if params.has_script_crashed == nil then params.has_script_crashed = false end
 
-    if main_loop_thread and not params.skipThreadCleanup then
+    if main_loop_thread and not params.skip_thread_cleanup then
         util.remove_thread(main_loop_thread)
         main_loop_thread = nil
     end
 
-    if params.hasScriptCrashed then
+    if params.has_script_crashed then
         notify.push(
             SCRIPT_TITLE,
             "Oh no... Script crashed:(\nYou gotta restart it manually.",
@@ -92,14 +92,14 @@ end
 util.create_job(function()
     -- Ensure log file exists
     if not file.exists(LOG_FILE_PATH) and not create_empty_file(LOG_FILE_PATH) then
-        handle_script_exit({ hasScriptCrashed = true })
+        handle_script_exit({ has_script_crashed = true })
         return
     end
 
     -- Load log content
     local log_content, err = read_file(LOG_FILE_PATH)
     if err then
-        handle_script_exit({ hasScriptCrashed = true })
+        handle_script_exit({ has_script_crashed = true })
         return
     end
 
@@ -182,7 +182,7 @@ local function write_log_buffer_to_file(player_entries_to_log)
             "Cannot write to log file.\nScript is useless without logging.",
             { time = 10000, icon = notify.icon.hazard }
         )
-        handle_script_exit({ hasScriptCrashed = true })
+        handle_script_exit({ has_script_crashed = true })
         return
     end
 
