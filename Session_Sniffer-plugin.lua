@@ -72,6 +72,13 @@ local function dec_to_ipv4(ip)
         ip & 255
     )
 end
+
+-- === Player Validation ===
+local function is_valid_player_entry(scid, ip, name)
+    if not scid or scid <= 0 then return false end
+    if ip == "0.0.0.0" or ip == "255.255.255.255" then return false end
+    if not name or name == "" or name == "**Invalid**" then return false end
+    return true
 end
 
 local function extract_valid_player_data(player)
@@ -85,13 +92,12 @@ local function extract_valid_player_data(player)
     end
 
     local scid = player.rockstar_id
-    if not scid or scid <= 0 then return nil end
-
     local ip = dec_to_ipv4(player.ip_address)
-    if ip == "0.0.0.0" or ip == "255.255.255.255" then return nil end
-
     local name = player.name
-    if not name or name == "" or name == "**Invalid**" then return nil end
+
+    if not is_valid_player_entry(scid, ip, name) then
+        return nil
+    end
 
     return scid, name, ip
 end
@@ -149,9 +155,9 @@ util.create_job(function()
 
     initializationDone = true
 
-    local function count(tbl)
+    local function count(t)
         local n = 0
-        for _ in pairs(tbl) do n = n + 1 end
+        for _ in pairs(t) do n = n + 1 end
         return n
     end
 
