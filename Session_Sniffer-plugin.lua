@@ -104,20 +104,17 @@ end
 
 -- === Initialization Job ===
 util.create_job(function()
-    -- Ensure log file exists
     if not file.exists(LOG_FILE_PATH) and not create_empty_file(LOG_FILE_PATH) then
         handle_script_exit({ has_script_crashed = true })
         return
     end
 
-    -- Load log content
     local log_content, err = read_file(LOG_FILE_PATH)
     if err then
         handle_script_exit({ has_script_crashed = true })
         return
     end
 
-    -- Fix missing newline
     if is_file_string_need_newline_ending(log_content) then
         local handle = file.open(LOG_FILE_PATH, { append = true })
         if handle.valid then
@@ -126,11 +123,9 @@ util.create_job(function()
         end
     end
 
-    -- Sets for stats
     local unique_scids, unique_ips, unique_names = {}, {}, {}
     local total_lines, total_loaded = 0, 0
 
-    -- Populate logged_players
     for line in log_content:gmatch("[^\r\n]+") do
         total_lines = total_lines + 1
 
