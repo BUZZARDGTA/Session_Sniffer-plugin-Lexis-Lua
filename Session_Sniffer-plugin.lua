@@ -115,7 +115,7 @@ util.create_job(function()
         return
     end
 
-    if is_file_string_need_newline_ending(log_content) then
+    if needs_trailing_newline(content) then
         local handle = file.open(LOG_FILE_PATH, { append = true })
         if handle.valid then
             handle.text = handle.text .. "\n"
@@ -198,9 +198,9 @@ local function write_log_buffer_to_file(player_entries_to_log)
     handle.text = table.concat(player_entries_to_log, "\n") .. "\n"
 end
 
--- === Event Listeners ===
+-- === Event Listener ===
 events.subscribe(events.event.player_join, function(data)
-    while not initializationDone do
+    while not initialization_done do
         util.yield()
     end
 
