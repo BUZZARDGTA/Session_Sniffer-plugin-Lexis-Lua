@@ -4,8 +4,8 @@
 -- GitHub Repository: https://github.com/Illegal-Services/Session_Sniffer-plugin-Lexis-Lua
 
 -- === Globals ===
-local mainLoopThread = nil
-local initializationDone = false
+local main_loop_thread = nil
+local initialization_done = false
 local loggedPlayers = {}  -- Dedup map: scid -> { [ip] = true }
 
 -- === Constants ===
@@ -153,7 +153,7 @@ util.create_job(function()
         end
     end
 
-    initializationDone = true
+    initialization_done = true
 
     local function count(t)
         local n = 0
