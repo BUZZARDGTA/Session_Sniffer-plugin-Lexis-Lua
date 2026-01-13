@@ -55,8 +55,8 @@ local function handle_script_exit(params)
     if params.has_script_crashed then
         notify.push(
             SCRIPT_TITLE,
-            "Oh no... Script crashed:(\nYou gotta restart it manually.",
-            { time = 10000 }
+            "Oh no... Script crashed:(\nYou'll need to restart it manually.",
+            { time = 10000, icon = notify.icon.hazard }
         )
     end
 
