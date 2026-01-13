@@ -125,7 +125,7 @@ util.create_job(function()
         return
     end
 
-    if needs_trailing_newline(content) then
+    if needs_trailing_newline(log_content) then
         local handle = file.open(LOG_FILE_PATH, { append = true })
         if handle.valid then
             handle.text = handle.text .. "\n"
