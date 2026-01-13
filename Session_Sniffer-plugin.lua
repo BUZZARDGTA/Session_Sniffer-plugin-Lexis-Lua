@@ -7,6 +7,7 @@
 local main_loop_thread = nil
 local initialization_done = false
 local loggedPlayers = {}  -- Dedup map: scid -> { [ip] = true }
+local log_queue = {}  -- Single-writer queue
 
 -- === Constants ===
 local SCRIPT_NAME <const> = "Session_Sniffer-plugin.lua"
@@ -19,44 +20,32 @@ local function needs_trailing_newline(str)
     return #str > 0 and str:sub(-1) ~= "\n"
 end
 
-local function read_file(file_path)
-    local handle = file.open(file_path, { create_if_not_exists = false })
-    if not handle.valid then
-        return nil, "Failed to open file"
+local function read_or_create_file(path)
+    local dir = path:match("^(.*)[/\\]")
+    if dir and not dirs.exists(dir) then
+        dirs.create(dir)
     end
-    return handle.text, nil
+
+    local handle = file.open(path, { create_if_not_exists = true })
+    if not handle.valid then
+        return nil
+    end
+    return handle.text
 end
 
-local function create_empty_file(filepath)
-    local dir = filepath:match("^(.*)[/\\]")
-    if dir and not dirs.exists(dir) then dirs.create(dir) end
+local function handle_script_exit(opts)
+    opts = opts or {}
 
-    local handle = file.open(filepath, { create_if_not_exists = true })
-    if not handle.valid then
-        notify.push(
-            SCRIPT_TITLE,
-            "Failed to create log file at:\n" .. filepath,
-            { time = 15000 }
-        )
-        return false
-    end
-    return true
-end
-
-local function handle_script_exit(params)
-    params = params or {}
-    if params.has_script_crashed == nil then params.has_script_crashed = false end
-
-    if mainLoopThread and not params.skip_thread_cleanup then
-        util.remove_thread(mainLoopThread)
-        mainLoopThread = nil
+    if main_loop_thread and not opts.skip_thread_cleanup then
+        util.remove_thread(main_loop_thread)
+        main_loop_thread = nil
     end
 
-    if params.has_script_crashed then
+    if opts.has_script_crashed then
         notify.push(
             SCRIPT_TITLE,
             "Oh no... Script crashed:(\nYou'll need to restart it manually.",
-            { time = 10000, icon = notify.icon.hazard }
+            { time = 15000, icon = notify.icon.hazard }
         )
     end
 
@@ -76,7 +65,7 @@ end
 -- === Player Validation ===
 local function is_valid_player_entry(scid, ip, name)
     if not scid or scid <= 0 then return false end
-    if ip == "0.0.0.0" or ip == "255.255.255.255" then return false end
+    if not ip or ip == "" or ip == "0.0.0.0" or ip == "255.255.255.255" then return false end
     if not name or name == "" or name == "**Invalid**" then return false end
     return true
 end
@@ -102,15 +91,36 @@ local function extract_valid_player_data(player)
     return scid, name, ip
 end
 
--- === Initialization Job ===
-util.create_job(function()
-    if not file.exists(LOG_FILE_PATH) and not create_empty_file(LOG_FILE_PATH) then
-        handle_script_exit({ has_script_crashed = true })
-        return
+-- === Logging Core ===
+local function build_log_entry(timestamp, scid, name, ip)
+    loggedPlayers[scid] = loggedPlayers[scid] or {}
+
+    if loggedPlayers[scid][ip] then
+        return nil
     end
 
-    local log_content, err = read_file(LOG_FILE_PATH)
-    if err then
+    loggedPlayers[scid][ip] = true
+
+    return string.format(
+        "user:%s, scid:%d, ip:%s, timestamp:%d",
+        name, scid, ip, timestamp
+    )
+end
+
+local function enqueue_log_entry(entry)
+    log_queue[#log_queue + 1] = entry
+end
+
+-- === Initialization Job ===
+util.create_job(function()
+    local log_content = read_or_create_file(LOG_FILE_PATH)
+    if not log_content then
+        notify.push(
+            SCRIPT_TITLE,
+            "Failed to read/create log file at:\n" .. LOG_FILE_PATH,
+            { time = 10000, icon = notify.icon.hazard }
+        )
+
         handle_script_exit({ has_script_crashed = true })
         return
     end
@@ -129,21 +139,18 @@ util.create_job(function()
     for line in log_content:gmatch("[^\r\n]+") do
         total_lines = total_lines + 1
 
-        local name, scid, ip = line:match("user:([^,]+),%s*scid:(%d+),%s*ip:([%d%.]+)")
-        if not scid or not ip then
-            scid, ip = line:match("scid:(%d+), ip:([%d%.]+)")
-        end
-
-        if scid and ip then
+        local name, scid, ip = line:match("user:([^,]+), scid:(%d+), ip:([%d%.]+)")
+        if name and scid and ip then
             local scid_num = tonumber(scid)
-            if scid_num and scid_num > 0 and ip ~= "0.0.0.0" and ip ~= "255.255.255.255" then
-                total_loaded = total_loaded + 1
+            if is_valid_player_entry(scid_num, ip, name) then
                 loggedPlayers[scid_num] = loggedPlayers[scid_num] or {}
                 loggedPlayers[scid_num][ip] = true
 
                 unique_scids[scid_num] = true
                 unique_ips[ip] = true
-                if name and name ~= "" then unique_names[name] = true end
+                if name and name ~= "" and name ~= "**Invalid**" then unique_names[name] = true end
+
+                total_loaded = total_loaded + 1
             end
         end
     end
@@ -171,32 +178,23 @@ util.create_job(function()
     )
 end)
 
--- === Logging Helpers ===
-local function add_player_to_log_buffer(player_entries_to_log, current_timestamp, player_scid, player_name, player_ip)
-    loggedPlayers[player_scid] = loggedPlayers[player_scid] or {}
-    if not loggedPlayers[player_scid][player_ip] then
-        loggedPlayers[player_scid][player_ip] = true
-        player_entries_to_log[#player_entries_to_log + 1] = string.format(
-            "user:%s, scid:%d, ip:%s, timestamp:%d",
-            player_name, player_scid, player_ip, current_timestamp
-        )
-    end
-end
+-- === Single Writer Thread ===
+util.create_thread(function()
+    if #log_queue > 0 then
+        local entries_to_write = log_queue
+        log_queue = {}
 
-local function write_log_buffer_to_file(player_entries_to_log)
-    local handle = file.open(LOG_FILE_PATH, { append = true })
-    if not handle.valid then
-        notify.push(
-            SCRIPT_TITLE,
-            "Cannot write to log file.\nScript is useless without logging.",
-            { time = 10000, icon = notify.icon.hazard }
-        )
-        handle_script_exit({ has_script_crashed = true })
-        return
+        local handle = file.open(LOG_FILE_PATH, { append = true })
+        if not handle.valid then
+            handle_script_exit({ has_script_crashed = true })
+            return
+        end
+
+        handle.text = table.concat(entries_to_write, "\n") .. "\n"
     end
 
-    handle.text = table.concat(player_entries_to_log, "\n") .. "\n"
-end
+    util.yield(500)
+end)
 
 -- === Event Listener ===
 events.subscribe(events.event.player_join, function(data)
@@ -204,38 +202,34 @@ events.subscribe(events.event.player_join, function(data)
         util.yield()
     end
 
-    local player_entries_to_log = {}
-    local player = data.player
-
-    local scid, name, ip = extract_valid_player_data(player)
+    local scid, name, ip = extract_valid_player_data(data.player)
     if scid then
-        add_player_to_log_buffer(player_entries_to_log, os.time(), scid, name, ip)
-    end
-
-    if #player_entries_to_log > 0 then
-        write_log_buffer_to_file(player_entries_to_log)
+        local entry = build_log_entry(os.time(), scid, name, ip)
+        if entry then
+            enqueue_log_entry(entry)
+        end
     end
 end)
 
 -- === Main Loop ===
-mainLoopThread = util.create_thread(function()
+main_loop_thread = util.create_thread(function()
     while not initialization_done do
         util.yield()
     end
 
-    if Natives.network_is_session_started() then
-        local player_entries_to_log = {}
+    if not Natives.network_is_session_started() then
+        return
+    end
 
-        for _, player in ipairs(players.list()) do
-            local scid, name, ip = extract_valid_player_data(player)
-            if scid then
-                add_player_to_log_buffer(player_entries_to_log, os.time(), scid, name, ip)
+    for _, player in ipairs(players.list()) do
+        local scid, name, ip = extract_valid_player_data(player)
+        if scid then
+            local entry = build_log_entry(os.time(), scid, name, ip)
+            if entry then
+                enqueue_log_entry(entry)
             end
-            util.yield()
         end
 
-        if #player_entries_to_log > 0 then
-            write_log_buffer_to_file(player_entries_to_log)
-        end
+        util.yield()
     end
 end)
