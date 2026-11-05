@@ -8,16 +8,23 @@
 local mainLoopThread = nil
 local last_logger_scan_timestamp = 0
 local logged_players = {}
+local last_written_host_key = nil
 
 -- === Constants ===
 local SCRIPT_NAME <const> = "Session_Sniffer-plugin.lua"
 local SCRIPT_TITLE <const> = "Session Sniffer"
 local SCRIPT_LOG__PATH <const> = paths.script .. "\\Session_Sniffer-plugin\\log.txt"
+local SCRIPT_HOST__PATH <const> = paths.script .. "\\Session_Sniffer-plugin\\session_host.txt"
 local LOGGER_SCAN_INTERVAL_SECONDS <const> = 1
 
 -- === Utility Functions ===
 local function handle_script_exit(params)
     params = params or {}
+    local host_handle = file.open(SCRIPT_HOST__PATH, { create_if_not_exists = true })
+    if host_handle.valid then
+        host_handle.text = ""
+    end
+
     if mainLoopThread and not params.skipThreadCleanup then
         util.remove_thread(mainLoopThread)
         mainLoopThread = nil
@@ -48,11 +55,30 @@ local function make_dedup_key(scid, ip, name)
     return scid .. ":" .. ip .. ":" .. name
 end
 
+local function write_session_host_file(host_key, host_entry)
+    host_key = host_key or ""
+    host_entry = host_entry or ""
+    if host_key == last_written_host_key then
+        return
+    end
+
+    local handle = file.open(SCRIPT_HOST__PATH, { create_if_not_exists = true })
+    if not handle.valid then
+        handle_script_exit({ hasScriptCrashed = true })
+        return
+    end
+
+    handle.text = host_entry
+    last_written_host_key = host_key
+end
+
 local function init_log_cache()
     local dir = SCRIPT_LOG__PATH:match("^(.*)[/\\]")
     if dir and not dirs.exists(dir) then
         dirs.create(dir)
     end
+
+    write_session_host_file("", "")
 
     local handle = file.open(SCRIPT_LOG__PATH, { create_if_not_exists = true })
     if not handle.valid then
@@ -124,6 +150,10 @@ mainLoopThread = util.create_thread(function()
             local player_list = players.list()
             if player_list and #player_list > 0 then
                 local player_entries_to_log = nil
+                local host_key = ""
+                local host_entry = ""
+                local session_host = game.host()
+                local hostPlayerID = session_host and session_host.exists and session_host.connected and session_host.id or nil
 
                 for _, player in ipairs(player_list) do
                     if player and player ~= players.me() and type(player.ip_address) == "number" then
@@ -134,13 +164,18 @@ mainLoopThread = util.create_thread(function()
                                 local playerName = player.name
                                 if playerName and playerName ~= "" and playerName ~= "**Invalid**" then
                                     local key = make_dedup_key(playerSCID, playerIP, playerName)
+                                    local formatted_entry = string.format(
+                                        "user:%s, scid:%d, ip:%s, timestamp:%d",
+                                        playerName, playerSCID, playerIP, currentTimestamp
+                                    )
                                     if not logged_players[key] then
                                         logged_players[key] = true
                                         player_entries_to_log = player_entries_to_log or {}
-                                        player_entries_to_log[#player_entries_to_log + 1] = string.format(
-                                            "user:%s, scid:%d, ip:%s, timestamp:%d",
-                                            playerName, playerSCID, playerIP, currentTimestamp
-                                        )
+                                        player_entries_to_log[#player_entries_to_log + 1] = formatted_entry
+                                    end
+                                    if hostPlayerID ~= nil and player.id == hostPlayerID then
+                                        host_key = key
+                                        host_entry = formatted_entry .. "\n"
                                     end
                                 end
                             end
@@ -151,8 +186,14 @@ mainLoopThread = util.create_thread(function()
                 if player_entries_to_log then
                     write_to_log_file(player_entries_to_log)
                 end
+
+                write_session_host_file(host_key, host_entry)
+            else
+                write_session_host_file("", "")
             end
         end
+    else
+        write_session_host_file("", "")
     end
 
     util.yield(100)
