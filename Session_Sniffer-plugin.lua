@@ -1,51 +1,33 @@
 -- Author: IB_U_Z_Z_A_R_Dl
 -- Description: Plugin for Session Sniffer project on GitHub.
--- Enables username resolution in the Session Sniffer project by logging all players from your sessions to "Lexis\Grand Theft Auto V\scripts\Session_Sniffer-plugin\log.txt".
--- GitHub Repository: https://github.com/Illegal-Services/Session_Sniffer-plugin-Lexis-Lua
+-- Allows you to automatically have every usernames showing up on Session Sniffer project, by logging all players from your sessions to "Lexis\Grand Theft Auto V\scripts\Session_Sniffer-plugin\log.txt".
+-- GitHub Repository: https://github.com/BUZZARDGTA/Session_Sniffer-plugin-Lexis-Lua
+
 
 -- === Globals ===
-local main_loop_thread = nil
-local initialization_done = false
-local loggedPlayers = {}  -- Dedup map: scid -> { [ip] = true }
-local log_queue = {}  -- Single-writer queue
+local mainLoopThread = nil
+local last_logger_scan_timestamp = 0
+local logged_players = {}
 
 -- === Constants ===
 local SCRIPT_NAME <const> = "Session_Sniffer-plugin.lua"
 local SCRIPT_TITLE <const> = "Session Sniffer"
-local LOG_FILE_PATH <const> = paths.script .. "\\Session_Sniffer-plugin\\log.txt"
-local Natives <const> = require("natives")
+local SCRIPT_LOG__PATH <const> = paths.script .. "\\Session_Sniffer-plugin\\log.txt"
+local LOGGER_SCAN_INTERVAL_SECONDS <const> = 1
 
 -- === Utility Functions ===
-local function needs_trailing_newline(str)
-    return #str > 0 and str:sub(-1) ~= "\n"
-end
-
-local function read_or_create_file(path)
-    local dir = path:match("^(.*)[/\\]")
-    if dir and not dirs.exists(dir) then
-        dirs.create(dir)
+local function handle_script_exit(params)
+    params = params or {}
+    if mainLoopThread and not params.skipThreadCleanup then
+        util.remove_thread(mainLoopThread)
+        mainLoopThread = nil
     end
 
-    local handle = file.open(path, { create_if_not_exists = true })
-    if not handle.valid then
-        return nil
-    end
-    return handle.text
-end
-
-local function handle_script_exit(opts)
-    opts = opts or {}
-
-    if main_loop_thread and not opts.skip_thread_cleanup then
-        util.remove_thread(main_loop_thread)
-        main_loop_thread = nil
-    end
-
-    if opts.has_script_crashed then
+    if params.hasScriptCrashed then
         notify.push(
             SCRIPT_TITLE,
-            "Oh no... Script crashed:(\nYou'll need to restart it manually.",
-            { time = 15000, icon = notify.icon.hazard }
+            "Oh no... Script crashed:(\nYou gotta restart it manually.",
+            { time = 10000, icon = notify.icon.hazard }
         )
     end
 
@@ -62,174 +44,116 @@ local function dec_to_ipv4(ip)
     )
 end
 
--- === Player Validation ===
-local function is_valid_player_entry(scid, ip, name)
-    if not scid or scid <= 0 then return false end
-    if not ip or ip == "" or ip == "0.0.0.0" or ip == "255.255.255.255" then return false end
-    if not name or name == "" or name == "**Invalid**" then return false end
-    return true
+local function make_dedup_key(scid, ip, name)
+    return scid .. ":" .. ip .. ":" .. name
 end
 
-local function extract_valid_player_data(player)
-    if not player
-        or not player.connected
-        or not player.exists
-        or player == players.me()
-        or type(player.ip_address) ~= "number"
-    then
-        return nil
+local function init_log_cache()
+    local dir = SCRIPT_LOG__PATH:match("^(.*)[/\\]")
+    if dir and not dirs.exists(dir) then
+        dirs.create(dir)
     end
 
-    local scid = player.rockstar_id
-    local ip = dec_to_ipv4(player.ip_address)
-    local name = player.name
-
-    if not is_valid_player_entry(scid, ip, name) then
-        return nil
-    end
-
-    return scid, name, ip
-end
-
--- === Logging Core ===
-local function build_log_entry(timestamp, scid, name, ip)
-    loggedPlayers[scid] = loggedPlayers[scid] or {}
-
-    if loggedPlayers[scid][ip] then
-        return nil
-    end
-
-    loggedPlayers[scid][ip] = true
-
-    return string.format(
-        "user:%s, scid:%d, ip:%s, timestamp:%d",
-        name, scid, ip, timestamp
-    )
-end
-
-local function enqueue_log_entry(entry)
-    log_queue[#log_queue + 1] = entry
-end
-
--- === Initialization Job ===
-util.create_job(function()
-    local log_content = read_or_create_file(LOG_FILE_PATH)
-    if not log_content then
-        notify.push(
-            SCRIPT_TITLE,
-            "Failed to read/create log file at:\n" .. LOG_FILE_PATH,
-            { time = 10000, icon = notify.icon.hazard }
-        )
-
-        handle_script_exit({ has_script_crashed = true })
+    local handle = file.open(SCRIPT_LOG__PATH, { create_if_not_exists = true })
+    if not handle.valid then
+        handle_script_exit({ hasScriptCrashed = true })
         return
     end
 
-    if needs_trailing_newline(log_content) then
-        local handle = file.open(LOG_FILE_PATH, { append = true })
-        if handle.valid then
-            handle.text = handle.text .. "\n"
-            log_content = log_content .. "\n"
-        end
+    local content = handle.text
+    if not content or #content == 0 then
+        notify.push(SCRIPT_TITLE, "Initialized new log file.", { time = 5000, icon = notify.icon.info })
+        return
     end
 
-    local unique_scids, unique_ips, unique_names = {}, {}, {}
-    local total_lines, total_loaded = 0, 0
-
-    for line in log_content:gmatch("[^\r\n]+") do
-        total_lines = total_lines + 1
-
-        local name, scid, ip = line:match("user:([^,]+), scid:(%d+), ip:([%d%.]+)")
+    local loaded_count = 0
+    for line in content:gmatch("[^\r\n]+") do
+        local name, scid, ip = line:match("^user:(.-), scid:(%d+), ip:([%d%.]+)")
         if name and scid and ip then
-            local scid_num = tonumber(scid)
-            if is_valid_player_entry(scid_num, ip, name) then
-                loggedPlayers[scid_num] = loggedPlayers[scid_num] or {}
-                loggedPlayers[scid_num][ip] = true
-
-                unique_scids[scid_num] = true
-                unique_ips[ip] = true
-                if name and name ~= "" and name ~= "**Invalid**" then unique_names[name] = true end
-
-                total_loaded = total_loaded + 1
+            local key = make_dedup_key(scid, ip, name)
+            if not logged_players[key] then
+                logged_players[key] = true
+                loaded_count = loaded_count + 1
             end
         end
     end
 
-    initialization_done = true
-
-    local function count(t)
-        local n = 0
-        for _ in pairs(t) do n = n + 1 end
-        return n
+    -- Ensure the file ends with a trailing newline if it has content
+    if content:sub(-1) ~= "\n" then
+        local append_handle = file.open(SCRIPT_LOG__PATH, { append = true })
+        if append_handle.valid then
+            append_handle.text = "\n"
+        end
     end
 
     notify.push(
         SCRIPT_TITLE,
-        string.format(
-            "Loaded %d players (%d names, %d IPs)\nLines: %d/%d\nLog: %s",
-            count(unique_scids),
-            count(unique_names),
-            count(unique_ips),
-            total_loaded,
-            total_lines,
-            LOG_FILE_PATH
-        ),
-        { time = 8000, icon = notify.icon.info }
+        string.format("Loaded %d unique player%s from log.", loaded_count, loaded_count == 1 and "" or "s"),
+        { time = 5000, icon = notify.icon.info }
     )
-end)
+end
 
--- === Single Writer Thread ===
-util.create_thread(function()
-    if #log_queue > 0 then
-        local entries_to_write = log_queue
-        log_queue = {}
-
-        local handle = file.open(LOG_FILE_PATH, { append = true })
-        if not handle.valid then
-            handle_script_exit({ has_script_crashed = true })
-            return
-        end
-
-        handle.text = table.concat(entries_to_write, "\n") .. "\n"
-    end
-
-    util.yield(500)
-end)
-
--- === Event Listener ===
-events.subscribe(events.event.player_join, function(data)
-    while not initialization_done do
-        util.yield()
-    end
-
-    local scid, name, ip = extract_valid_player_data(data.player)
-    if scid then
-        local entry = build_log_entry(os.time(), scid, name, ip)
-        if entry then
-            enqueue_log_entry(entry)
-        end
-    end
-end)
-
--- === Main Loop ===
-main_loop_thread = util.create_thread(function()
-    while not initialization_done do
-        util.yield()
-    end
-
-    if not Natives.network_is_session_started() then
+local function write_to_log_file(player_entries_to_log)
+    local handle = file.open(SCRIPT_LOG__PATH, { append = true })
+    if not handle.valid then
+        handle_script_exit({ hasScriptCrashed = true })
         return
     end
 
-    for _, player in ipairs(players.list()) do
-        local scid, name, ip = extract_valid_player_data(player)
-        if scid then
-            local entry = build_log_entry(os.time(), scid, name, ip)
-            if entry then
-                enqueue_log_entry(entry)
+    local combined_entries = table.concat(player_entries_to_log, "\n") .. "\n"
+    handle.text = combined_entries
+end
+
+
+-- === Main Menu Features ===
+local is_logging_enabled = true
+
+
+-- === Initialization ===
+init_log_cache()
+
+
+-- === Main Loop ===
+mainLoopThread = util.create_thread(function()
+    if is_logging_enabled then
+        local currentTimestamp = os.time()
+
+        if currentTimestamp - last_logger_scan_timestamp >= LOGGER_SCAN_INTERVAL_SECONDS then
+            last_logger_scan_timestamp = currentTimestamp
+
+            local player_list = players.list()
+            if player_list and #player_list > 0 then
+                local player_entries_to_log = nil
+
+                for _, player in ipairs(player_list) do
+                    if player and player ~= players.me() and type(player.ip_address) == "number" then
+                        local playerSCID = player.rockstar_id
+                        if playerSCID and playerSCID > 0 then
+                            local playerIP = dec_to_ipv4(player.ip_address)
+                            if playerIP and playerIP ~= "255.255.255.255" and playerIP ~= "0.0.0.0" then
+                                local playerName = player.name
+                                if playerName and playerName ~= "" and playerName ~= "**Invalid**" then
+                                    local key = make_dedup_key(playerSCID, playerIP, playerName)
+                                    if not logged_players[key] then
+                                        logged_players[key] = true
+                                        player_entries_to_log = player_entries_to_log or {}
+                                        player_entries_to_log[#player_entries_to_log + 1] = string.format(
+                                            "user:%s, scid:%d, ip:%s, timestamp:%d",
+                                            playerName, playerSCID, playerIP, currentTimestamp
+                                        )
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+
+                if player_entries_to_log then
+                    write_to_log_file(player_entries_to_log)
+                end
             end
         end
-
-        util.yield()
     end
+
+    util.yield(100)
 end)
